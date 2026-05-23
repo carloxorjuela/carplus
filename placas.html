@@ -844,8 +844,8 @@ function renderDetailBody(placa, datos) {
 
   // RTM
   if (revLast) {
-    html += docRow('RTM / Tecnomecanica', revLast.numeroCertificado,
-      fmtFecha(revLast.fechaExpedicion), fmtFecha(revLast.fechaVigencia),
+    html += docRow('RTM / Tecnomecanica', revLast.nroCertificado,
+      fmtFecha(revLast.fechaInicio), fmtFecha(revLast.fechaVigencia),
       revLast.estado, revLast.nombreCda);
   } else {
     html += docRow('RTM / Tecnomecanica', '—', '—', '—', 'SIN DATOS');
@@ -1183,8 +1183,8 @@ function generatePDF(placa, datos) {
     docRows.push(['SOAT', '—', '—', '—', '—', 'SIN DATOS']);
   }
   if (revLast) {
-    docRows.push(['RTM / Tecnomecanica', revLast.numeroCertificado || '—',
-      fmtFecha(revLast.fechaExpedicion), fmtFecha(revLast.fechaVigencia),
+    docRows.push(['RTM / Tecnomecanica', revLast.nroCertificado || '—',
+      fmtFecha(revLast.fechaInicio), fmtFecha(revLast.fechaVigencia),
       revLast.nombreCda || '—', revLast.estado || '—']);
   } else {
     docRows.push(['RTM / Tecnomecanica', '—', '—', '—', '—', 'SIN DATOS']);
