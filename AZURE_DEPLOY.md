@@ -1,7 +1,10 @@
 # Azure Deployment — Estado y Pasos
 
-**Objetivo:** Publicar el portal web (admin, preoperacional, consulta) en Azure App Service.  
+**Objetivo:** Publicar el portal web (admin, preoperacional, consulta) en Azure App Service.
 **Restricción conocida:** RUNT y SIMIT bloquean IPs de datacenter → el scraper debe seguir corriendo en PC local Colombia. Azure solo sirve la UI.
+
+**Estado actual: ✅ DESPLEGADO Y FUNCIONANDO**
+**Última actualización:** 2026-05-23
 
 ---
 
@@ -12,7 +15,7 @@
 | Resource Group | `rg-speedy` | ✅ Creado |
 | Container Registry | `acrspeedyvehicular` | ✅ Creado (Basic) |
 | App Service Plan | `plan-speedy` | ✅ Creado (Linux B1) |
-| Web App | `speedy-vehicular` | ✅ Creado |
+| Web App | `speedy-vehicular` | ✅ Corriendo |
 
 **Suscripción ID:** `95fc091d-ef91-4f7a-8587-d8e81c70fa3c`  
 **URL pública:** `https://speedy-vehicular.azurewebsites.net`
@@ -34,8 +37,11 @@ Azure App Service
     ↓ /home/data/carplus.db (Azure Files persistente)
 ```
 
-**¿Por qué ghcr.io y no ACR?**  
+**¿Por qué ghcr.io y no ACR?**
 La suscripción tiene `TasksOperationsNotAllowed` en ACR — bloquea tanto `az acr build` como el push via CI. GitHub Container Registry (ghcr.io) es gratuito y no tiene esa restricción.
+
+**¿Por qué webhook y no Service Principal?**
+La cuenta es universitaria (`urosario.edu.co`) — el tenant de Azure AD está administrado por la universidad y no permite crear app registrations a usuarios regulares. En su lugar se usa el webhook de Continuous Deployment de Azure App Service: GitHub Actions hace `curl POST` al webhook tras el push de la imagen y Azure jala automáticamente. El paquete ghcr.io/carloxorjuela/speedy está configurado como **público**.
 
 ---
 
@@ -81,16 +87,17 @@ az webapp config appsettings set --resource-group rg-speedy --name speedy-vehicu
 
 Archivo: `.github/workflows/deploy.yml`
 
-Requiere 4 secretos configurados en `github.com/carloxorjuela/carplus/settings/secrets/actions`:
+Secretos configurados en `github.com/carloxorjuela/carplus/settings/secrets/actions`:
 
-| Secret | Cómo obtenerlo |
-|---|---|
-| `AZURE_CREDENTIALS` | `az ad sp create-for-rbac --name "github-speedy" --role contributor --scopes /subscriptions/95fc091d.../resourceGroups/rg-speedy --json-auth` |
-| `AZURE_APP_NAME` | `speedy-vehicular` |
-| `AZURE_RESOURCE_GROUP` | `rg-speedy` |
-| ~~`AZURE_PUBLISH_PROFILE`~~ | Ya no se usa (reemplazado por AZURE_CREDENTIALS) |
+| Secret | Valor | Estado |
+|---|---|---|
+| `AZURE_WEBHOOK_URL` | URL del webhook de CD del App Service | ✅ Configurado |
+| `AZURE_APP_NAME` | `speedy-vehicular` | ✅ Configurado |
+| `AZURE_RESOURCE_GROUP` | `rg-speedy` | ✅ Configurado |
 
 El `GITHUB_TOKEN` para ghcr.io lo genera GitHub automáticamente — no requiere configuración.
+
+> `AZURE_CREDENTIALS` (Service Principal) **no se usa** — reemplazado por webhook de CD.
 
 ---
 
@@ -109,34 +116,39 @@ az provider register --namespace Microsoft.ContainerRegistry --wait
 **Solución:** Abandonar ACR. Usar **GitHub Container Registry (ghcr.io)** en su lugar. El workflow actualizado usa `docker/build-push-action` → ghcr.io + `azure/CLI` para actualizar el container en App Service.
 
 ### 3. `Failed to get app runtime OS {}` — webapps-deploy action
-**Cuándo ocurre:** Al usar `azure/webapps-deploy@v3` con containers.  
-**Causa:** Bug conocido del action v3 con App Service de contenedores Linux.  
-**Solución:** Reemplazar el action por `azure/login` + `azure/CLI` que ejecuta directamente:
-```bash
-az webapp config container set --name ... --docker-custom-image-name ...
-az webapp restart --name ...
+**Cuándo ocurre:** Al usar `azure/webapps-deploy@v3` con containers.
+**Causa:** Bug conocido del action v3 con App Service de contenedores Linux.
+**Solución:** Reemplazado por webhook de Continuous Deployment — no se necesita `azure/login` ni `azure/CLI`.
+
+### 4. `Insufficient privileges` — Service Principal
+**Cuándo ocurre:** Al intentar `az ad sp create-for-rbac` con cuenta universitaria.
+**Causa:** El tenant `urosario.edu.co` administrado por la universidad no permite crear app registrations a usuarios regulares.
+**Solución:** Usar webhook de CD de Azure App Service. Se obtiene con:
+```powershell
+az webapp deployment container config --enable-cd true --name speedy-vehicular --resource-group rg-speedy --query CI_CD_URL -o tsv
 ```
+Guardar la URL como secret `AZURE_WEBHOOK_URL` en GitHub. El workflow hace `curl -s -X POST` al webhook tras el push.
 
 ---
 
-## Pasos pendientes para completar el deploy
+## Deploy completado ✅
 
-1. **Crear Service Principal** (si no existe):
-```powershell
-az ad sp create-for-rbac --name "github-speedy" --role contributor `
-  --scopes "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/rg-speedy" `
-  --json-auth
-```
-Copiar el JSON completo.
+| Paso | Estado |
+|---|---|
+| Recursos Azure creados | ✅ |
+| Dockerfile corregido (mkdir /home/data en CMD) | ✅ |
+| Workflow simplificado (webhook, sin Service Principal) | ✅ |
+| Imagen pública en ghcr.io/carloxorjuela/speedy | ✅ |
+| Secretos GitHub configurados | ✅ |
+| App Service corriendo | ✅ |
 
-2. **Agregar secretos en GitHub** (`/settings/secrets/actions`):
-   - `AZURE_CREDENTIALS` → JSON del paso anterior
-   - `AZURE_APP_NAME` → `speedy-vehicular`
-   - `AZURE_RESOURCE_GROUP` → `rg-speedy`
-
-3. **Correr el workflow** desde la pestaña Actions del repo (o hacer cualquier push a `main`).
-
-4. **Verificar** en `https://speedy-vehicular.azurewebsites.net`
+**URLs operativas:**
+| URL | Estado |
+|---|---|
+| `https://speedy-vehicular.azurewebsites.net/` | ✅ 200 |
+| `https://speedy-vehicular.azurewebsites.net/admin` | ✅ 200 |
+| `https://speedy-vehicular.azurewebsites.net/preoperacional` | ✅ 200 |
+| `https://speedy-vehicular.azurewebsites.net/health` | ✅ `{"status":"ok"}` |
 
 ---
 
