@@ -477,7 +477,7 @@ function renderRTMStatus(rtmSol) {
 }
 
 function renderSIMITStatus(simit) {
-  const ok = simit && simit.pazSalvo;
+  const ok = simit && (simit.pazSalvo || !simit.totalGeneral);
   const total = simit ? (simit.totalGeneral || 0) : 0;
   const el = document.getElementById('card-simit-status');
   el.innerHTML = `
@@ -624,7 +624,7 @@ function renderSIMIT(simit) {
     return;
   }
 
-  if (simit.pazSalvo) {
+  if (simit.pazSalvo || !simit.totalGeneral) {
     el.innerHTML = `
       <div class="flex items-center gap-4 p-4 bg-green-50 rounded-xl border border-green-200">
         <i class="fa-solid fa-circle-check text-green-500 text-4xl"></i>
@@ -1137,20 +1137,32 @@ function generarPDF() {
   pageCheck(30);
   sectionHeader('SIMIT — Estado de Cuenta');
 
-  if (simit.pazSalvo || !simit.totalGeneral) {
-    doc.setFillColor(220, 252, 231); doc.setDrawColor(134, 239, 172);
-    doc.roundedRect(12, y, W - 24, 12, 2, 2, 'FD');
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(21, 128, 61);
-    doc.text('✓  PAZ Y SALVO — Sin multas ni comparendos pendientes en SIMIT', W / 2, y + 7.5, { align: 'center' });
-    doc.setTextColor(0); y += 16;
-  } else {
-    // Total box
-    doc.setFillColor(254, 226, 226); doc.setDrawColor(252, 165, 165);
-    doc.roundedRect(12, y, W - 24, 10, 2, 2, 'FD');
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(185, 28, 28);
-    const totalStr = `TOTAL A PAGAR: $${Math.round(simit.totalGeneral || 0).toLocaleString('es-CO')}`;
-    doc.text(totalStr, W / 2, y + 6.5, { align: 'center' });
-    doc.setTextColor(0); y += 14;
+  const simitOk = simit.pazSalvo || !simit.totalGeneral;
+  {
+    const simitSummary = simitOk
+      ? [
+          ['Estado', 'Paz y Salvo'],
+          ['Detalle', 'Sin multas ni comparendos pendientes en SIMIT'],
+          ['Total deuda', '$0'],
+        ]
+      : [
+          ['Estado', 'Con multas / comparendos pendientes'],
+          ['Total a pagar', `$${Math.round(simit.totalGeneral || 0).toLocaleString('es-CO')}`],
+        ];
+    doc.autoTable({
+      startY: y, margin: { left: 12, right: 12, bottom: 20 }, theme: 'plain',
+      styles: { fontSize: 8, overflow: 'linebreak', cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 } },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { fontStyle: 'bold', textColor: [71, 85, 105], cellWidth: 50, fillColor: [241, 245, 249] },
+        1: { cellWidth: 'auto', textColor: simitOk ? [21, 128, 61] : [185, 28, 28], fontStyle: 'bold' },
+      },
+      body: simitSummary,
+    });
+    y = doc.lastAutoTable.finalY + 5;
+  }
+
+  if (!simitOk) {
 
     const multas = simit.multas || [];
     const comparendos = simit.comparendos || [];
@@ -1230,11 +1242,17 @@ function generarPDF() {
   sectionHeader('Limitaciones de Circulación');
 
   if (!lims.length) {
-    doc.setFillColor(220, 252, 231); doc.setDrawColor(134, 239, 172);
-    doc.roundedRect(12, y, W - 24, 10, 2, 2, 'FD');
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(21, 128, 61);
-    doc.text('✓  El vehículo no registra limitaciones de circulación', W / 2, y + 6.5, { align: 'center' });
-    doc.setTextColor(0); y += 14;
+    doc.autoTable({
+      startY: y, margin: { left: 12, right: 12, bottom: 20 }, theme: 'plain',
+      styles: { fontSize: 8, overflow: 'linebreak', cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 } },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { fontStyle: 'bold', textColor: [71, 85, 105], cellWidth: 50, fillColor: [241, 245, 249] },
+        1: { cellWidth: 'auto', textColor: [21, 128, 61], fontStyle: 'bold' },
+      },
+      body: [['Limitaciones', 'Sin limitaciones de circulación registradas']],
+    });
+    y = doc.lastAutoTable.finalY + 5;
   } else {
     const limRows = lims.map(l => [
       l.tipoLimitacion || '—',
