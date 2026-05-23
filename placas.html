@@ -804,10 +804,20 @@ function renderDetailBody(placa, datos) {
   const soatLast = soat.length ? soat[soat.length - 1] : null;
   const rcActiva = rc.find(x => (x.estado || '').toUpperCase() === 'ACTIVA') || rc[rc.length - 1] || null;
 
-  // RTM — from solicitudes (peticiones) filtered by RTM trámite
+  // RTM — from solicitudes (peticiones) filtered by RTM trámite.
+  // No fechaVigencia field exists; expiry = fechaSolicitud + 1 year.
   const _rtmKw = ['tecnico mecanica', 'tecnomecanica', 'rtm'];
-  const rtmSol = (Array.isArray(datos.solicitudes) ? datos.solicitudes : [])
-    .find(s => { const t = ((s.tramitesRealizados || '') + '').toLowerCase(); return _rtmKw.some(k => t.includes(k)); }) || null;
+  const _rtmCands = (Array.isArray(datos.solicitudes) ? datos.solicitudes : [])
+    .filter(s => { const t = ((s.tramitesRealizados || '') + '').toLowerCase(); return _rtmKw.some(k => t.includes(k)); });
+  _rtmCands.sort((a, b) => ((b.fechaSolicitud || '') > (a.fechaSolicitud || '') ? 1 : -1));
+  const rtmSol = _rtmCands[0] || null;
+  function _addOneYear(isoDate) {
+    if (!isoDate) return null;
+    const f = String(isoDate).substring(0, 10);
+    const p = f.split('-');
+    if (p.length !== 3) return null;
+    return `${parseInt(p[0]) + 1}-${p[1]}-${p[2]}`;
+  }
 
   let html = '';
 
@@ -847,7 +857,7 @@ function renderDetailBody(placa, datos) {
   // RTM
   if (rtmSol) {
     html += docRow('RTM / Tecnomecanica', String(rtmSol.noSolicitud || '—'),
-      fmtFecha(rtmSol.fechaSolicitud), fmtFecha(rtmSol.fechaVigencia || rtmSol.vigencia),
+      fmtFecha(rtmSol.fechaSolicitud), fmtFecha(_addOneYear(rtmSol.fechaSolicitud)),
       rtmSol.estado, rtmSol.entidad);
   } else {
     html += docRow('RTM / Tecnomecanica', '—', '—', '—', 'SIN DATOS');
@@ -1118,10 +1128,20 @@ function generatePDF(placa, datos) {
   const soatLast = soat.length ? soat[soat.length - 1] : null;
   const rcActiva = rc.find(x => (x.estado || '').toUpperCase() === 'ACTIVA') || rc[rc.length - 1] || null;
 
-  // RTM — from solicitudes (peticiones) filtered by RTM trámite
+  // RTM — from solicitudes (peticiones) filtered by RTM trámite.
+  // No fechaVigencia field; expiry = fechaSolicitud + 1 year.
   const _pdfRtmKw = ['tecnico mecanica', 'tecnomecanica', 'rtm'];
-  const rtmSolPdf = (Array.isArray(datos.solicitudes) ? datos.solicitudes : [])
-    .find(s => { const t = ((s.tramitesRealizados || '') + '').toLowerCase(); return _pdfRtmKw.some(k => t.includes(k)); }) || null;
+  const _pdfRtmCands = (Array.isArray(datos.solicitudes) ? datos.solicitudes : [])
+    .filter(s => { const t = ((s.tramitesRealizados || '') + '').toLowerCase(); return _pdfRtmKw.some(k => t.includes(k)); });
+  _pdfRtmCands.sort((a, b) => ((b.fechaSolicitud || '') > (a.fechaSolicitud || '') ? 1 : -1));
+  const rtmSolPdf = _pdfRtmCands[0] || null;
+  function _pdfAddOneYear(isoDate) {
+    if (!isoDate) return null;
+    const f = String(isoDate).substring(0, 10);
+    const p = f.split('-');
+    if (p.length !== 3) return null;
+    return `${parseInt(p[0]) + 1}-${p[1]}-${p[2]}`;
+  }
 
   // Section helper
   function sectionTitle(title) {
@@ -1188,7 +1208,7 @@ function generatePDF(placa, datos) {
   }
   if (rtmSolPdf) {
     docRows.push(['RTM / Tecnomecanica', String(rtmSolPdf.noSolicitud || '—'),
-      fmtFecha(rtmSolPdf.fechaSolicitud), fmtFecha(rtmSolPdf.fechaVigencia || rtmSolPdf.vigencia),
+      fmtFecha(rtmSolPdf.fechaSolicitud), fmtFecha(_pdfAddOneYear(rtmSolPdf.fechaSolicitud)),
       rtmSolPdf.entidad || '—', rtmSolPdf.estado || '—']);
   } else {
     docRows.push(['RTM / Tecnomecanica', '—', '—', '—', '—', 'SIN DATOS']);

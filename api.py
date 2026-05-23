@@ -140,19 +140,29 @@ def _upsert_placa_cache(placa: str, cedula_masked: str, datos: dict):
             soat_estado = s.get('estado')
 
         # RTM — from solicitudes (peticiones) filtered by RTM trámite
+        # /rtms returns empty; RTM certifications live in solicitudes.
+        # There is no fechaVigencia field — expiry = fechaSolicitud + 1 year.
         sol_list = datos.get('solicitudes') or []
         rtm_sol = None
         if isinstance(sol_list, list):
             rtm_kw = ('tecnico mecanica', 'tecnomecanica', 'rtm')
-            for s in sol_list:
-                tramite = (s.get('tramitesRealizados') or '').lower()
-                if any(kw in tramite for kw in rtm_kw):
-                    rtm_sol = s
-                    break
+            rtm_candidates = [
+                s for s in sol_list
+                if any(kw in (s.get('tramitesRealizados') or '').lower() for kw in rtm_kw)
+            ]
+            if rtm_candidates:
+                rtm_candidates.sort(key=lambda x: x.get('fechaSolicitud') or '', reverse=True)
+                rtm_sol = rtm_candidates[0]
         rtm_vence = rtm_cda = rtm_estado = None
         if rtm_sol:
-            raw = (rtm_sol.get('fechaVigencia') or rtm_sol.get('vigencia') or '')
-            rtm_vence = raw[:10] if raw else None
+            from datetime import date as _date
+            fecha_sol = (rtm_sol.get('fechaSolicitud') or '')[:10]
+            if fecha_sol and len(fecha_sol) == 10:
+                try:
+                    d = _date.fromisoformat(fecha_sol)
+                    rtm_vence = _date(d.year + 1, d.month, d.day).isoformat()
+                except Exception:
+                    pass
             rtm_cda = rtm_sol.get('entidad')
             rtm_estado = rtm_sol.get('estado')
 
