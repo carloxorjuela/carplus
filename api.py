@@ -7,7 +7,7 @@ import traceback
 from datetime import datetime, timezone
 from functools import wraps
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, redirect
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 # Support both Docker (/app) and local execution (directory of this file)
@@ -309,10 +309,10 @@ def consultar():
         _log_consulta(placa, cedula_masked, False, str(exc), elapsed_ms, ip)
         return jsonify({'ok': False, 'error': str(exc)}), 500
 
-# ── Placas page ───────────────────────────────────────────────────────────────
+# ── Placas page — redirect to admin (placas tab is now embedded in admin) ─────
 @app.route('/placas')
 def placas_page():
-    return send_from_directory(_HERE, 'placas.html')
+    return redirect('/admin')
 
 # ── Admin: placas cache ───────────────────────────────────────────────────────
 @app.route('/admin/placas', methods=['GET'])
