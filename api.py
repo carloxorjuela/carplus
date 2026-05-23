@@ -139,22 +139,22 @@ def _upsert_placa_cache(placa: str, cedula_masked: str, datos: dict):
             soat_aseguradora = s.get('razonSocialAsegur')
             soat_estado = s.get('estado')
 
-        # RTM — API returns a list directly (like /soat), or a dict with "revisiones"
-        tec_raw = datos.get('tecnomecanica')
-        if isinstance(tec_raw, list):
-            revs = tec_raw
-        elif isinstance(tec_raw, dict) and not tec_raw.get('error'):
-            revs = tec_raw.get('revisiones') or []
-        else:
-            revs = []
+        # RTM — from solicitudes (peticiones) filtered by RTM trámite
+        sol_list = datos.get('solicitudes') or []
+        rtm_sol = None
+        if isinstance(sol_list, list):
+            rtm_kw = ('tecnico mecanica', 'tecnomecanica', 'rtm')
+            for s in sol_list:
+                tramite = (s.get('tramitesRealizados') or '').lower()
+                if any(kw in tramite for kw in rtm_kw):
+                    rtm_sol = s
+                    break
         rtm_vence = rtm_cda = rtm_estado = None
-        if revs:
-            valid_r = [r for r in revs if r.get('fechaVigencia')]
-            rev = max(valid_r, key=lambda x: x['fechaVigencia']) if valid_r else revs[0]
-            raw = rev.get('fechaVigencia', '') or ''
+        if rtm_sol:
+            raw = (rtm_sol.get('fechaVigencia') or rtm_sol.get('vigencia') or '')
             rtm_vence = raw[:10] if raw else None
-            rtm_cda = rev.get('nombreCda')
-            rtm_estado = rev.get('estado')
+            rtm_cda = rtm_sol.get('entidad')
+            rtm_estado = rtm_sol.get('estado')
 
         # Responsabilidad Civil — prefer active policy with latest expiry
         rc_list = datos.get('responsabilidad_civil') or []
